@@ -580,8 +580,9 @@
   var camera;
   var renderer;
   var controls;
-  var brainMesh;
-  var brainGeometry;
+  var brainMeshes = [];
+  var brainGeometries = [];
+  var brainDecorGroup;
   var scalpMesh;
   var electrodeGroup;
   var activeElectrodeGroup;
@@ -783,8 +784,36 @@
   }
 
   function createBrain() {
-    brainGeometry = new THREE.SphereBufferGeometry(VISUAL.brainRadius, 132, 96);
-    var positionAttr = brainGeometry.attributes.position;
+    brainMeshes = [];
+    brainGeometries = [];
+    brainDecorGroup = new THREE.Group();
+
+    var leftGeometry = buildHemisphereGeometry(-1);
+    var rightGeometry = buildHemisphereGeometry(1);
+    var brainMaterial = new THREE.MeshPhongMaterial({
+      vertexColors: true,
+      shininess: 18,
+      specular: new THREE.Color(0x30475d),
+      transparent: true,
+      opacity: 0.99
+    });
+
+    var leftHemisphere = new THREE.Mesh(leftGeometry, brainMaterial.clone());
+    var rightHemisphere = new THREE.Mesh(rightGeometry, brainMaterial.clone());
+
+    brainGeometries.push(leftGeometry, rightGeometry);
+    brainMeshes.push(leftHemisphere, rightHemisphere);
+
+    scene.add(leftHemisphere);
+    scene.add(rightHemisphere);
+
+    buildBrainDecor(brainDecorGroup);
+    scene.add(brainDecorGroup);
+  }
+
+  function buildHemisphereGeometry(side) {
+    var geometry = new THREE.SphereBufferGeometry(VISUAL.brainRadius, 132, 96);
+    var positionAttr = geometry.attributes.position;
     var vertex = new THREE.Vector3();
 
     for (var i = 0; i < positionAttr.count; i += 1) {
@@ -794,97 +823,105 @@
       var y = vertex.y;
       var z = vertex.z;
       var absX = Math.abs(x);
-      var side = x >= 0 ? 1 : -1;
 
-      // Base anatomical proportions (frontal-occipital length > superior-inferior height).
-      var sx = 0.87;
-      var sy = 0.78;
-      var sz = 1.12;
+      // Fold a sphere into one hemisphere, then sculpt lobes and sulci on top.
+      var hx = side * (0.11 + 0.74 * Math.pow(absX, 0.86));
+      var hy = y * (0.78 - 0.05 * gaussian(z, -0.55, 0.25));
+      var hz = z * 1.16;
 
-      // Global lobe shaping.
-      var frontalBulge = 0.14 * gaussian(z, 0.48, 0.30) * (1 - 0.25 * clamp(-y, 0, 1));
-      var parietalBulge = 0.07 * gaussian(z, 0.08, 0.35) * (1 - 0.20 * clamp(-y, 0, 1));
-      var occipitalBulge = 0.09 * gaussian(z, -0.58, 0.24);
-      var temporalBulge = 0.12 * gaussian(absX, 0.62, 0.16) * gaussian(y, -0.12, 0.30);
+      var frontalBulge = 0.19 * gaussian(hz, 0.55, 0.24) * (1 - 0.20 * clamp(-hy, 0, 1));
+      var parietalCrown = 0.11 * gaussian(hy, 0.48, 0.22) * gaussian(hz, 0.04, 0.34);
+      var occipitalBulge = 0.13 * gaussian(hz, -0.66, 0.18);
+      var temporalBulge = 0.18 * gaussian(absX, 0.56, 0.18) * gaussian(hy, -0.18, 0.21);
+      var ventralCut = -0.21 * smoothstep(-0.92, -0.14, hy);
+      var sylvianDip = -0.10 * gaussian(hy, 0.02, 0.10) * gaussian(absX, 0.52, 0.14) * smoothstep(-0.2, 0.55, hz);
+      var centralSulcus = -0.05 * gaussian(hz, 0.10, 0.08) * gaussian(absX, 0.44, 0.11) * gaussian(hy, 0.30, 0.22);
+      var posteriorNotch = -0.05 * gaussian(hz, -0.30, 0.10) * gaussian(hy, 0.58, 0.12);
+      var medialFlatten = -0.17 * gaussian(absX, 0.0, 0.18) * smoothstep(-0.2, 0.95, hy);
 
-      // Interhemispheric fissure and inferior flattening.
-      var fissureDepth = -0.12 * gaussian(absX, 0.0, 0.065) * smoothstep(-0.15, 0.80, y);
-      var ventralFlatten = -0.16 * smoothstep(-1.0, -0.18, y) * (1 - 0.40 * gaussian(absX, 0.0, 0.40));
-
-      // Stylized gyri/sulci texture, reduced near the fissure.
-      var lateralWeight = smoothstep(0.08, 0.82, absX) * (1 - 0.35 * smoothstep(0.65, 1.0, y));
-      var sulciPattern =
-        0.040 *
-        Math.sin(17.0 * z + 5.0 * y + 0.7 * side) *
-        Math.sin(11.0 * y + 7.0 * x) *
-        lateralWeight;
+      var gyrusMask = smoothstep(0.14, 0.78, absX) * (1 - 0.45 * smoothstep(0.74, 1.0, hy));
+      var sulci =
+        0.034 *
+        Math.sin(20.0 * hz + 4.0 * hy + side * 0.9) *
+        Math.cos(15.0 * hy - 3.0 * hz) *
+        gyrusMask;
+      sulci += 0.018 * Math.sin(26.0 * hy + 8.0 * absX) * gaussian(absX, 0.46, 0.22) * gaussian(hz, -0.02, 0.70);
 
       var shape =
-        1.0 + frontalBulge + parietalBulge + occipitalBulge + temporalBulge + fissureDepth + ventralFlatten + sulciPattern;
-      shape = clamp(shape, 0.72, 1.34);
+        1.0 +
+        frontalBulge +
+        parietalCrown +
+        occipitalBulge +
+        temporalBulge +
+        ventralCut +
+        sylvianDip +
+        centralSulcus +
+        posteriorNotch +
+        medialFlatten +
+        sulci;
+      shape = clamp(shape, 0.70, 1.38);
 
-      vertex.set(x * sx, y * sy, z * sz).normalize().multiplyScalar(VISUAL.brainRadius * shape);
+      vertex.set(hx, hy, hz).normalize().multiplyScalar(VISUAL.brainRadius * shape);
+
+      // Keep an actual interhemispheric gap instead of just a crease.
+      vertex.x += side * 0.09;
       positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
 
-    brainGeometry.computeVertexNormals();
+    geometry.computeVertexNormals();
+    geometry.setAttribute("color", createNeutralColorAttribute(positionAttr.count));
+    return geometry;
+  }
 
-    var colors = new Float32Array(positionAttr.count * 3);
-    for (var c = 0; c < positionAttr.count; c += 1) {
-      colors[c * 3] = COLOR_NEUTRAL[0];
-      colors[c * 3 + 1] = COLOR_NEUTRAL[1];
-      colors[c * 3 + 2] = COLOR_NEUTRAL[2];
-    }
-    brainGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  function buildBrainDecor(group) {
+    var vertex = new THREE.Vector3();
 
-    var material = new THREE.MeshPhongMaterial({
-      vertexColors: true,
-      shininess: 26,
-      specular: new THREE.Color(0x345067),
-      transparent: true,
-      opacity: 0.98
-    });
-
-    brainMesh = new THREE.Mesh(brainGeometry, material);
-    scene.add(brainMesh);
-
-    // Extra anatomical cues so the object reads as a brain, not a sphere.
-    var cerebellumGeometry = new THREE.SphereBufferGeometry(0.40, 44, 30);
+    var cerebellumGeometry = new THREE.SphereBufferGeometry(0.38, 56, 38);
     var cerebellumPosition = cerebellumGeometry.attributes.position;
-    for (var j = 0; j < cerebellumPosition.count; j += 1) {
-      vertex.fromBufferAttribute(cerebellumPosition, j);
-      var ripple = 1 + 0.08 * Math.sin(vertex.x * 14.0) * Math.cos(vertex.y * 11.0);
-      vertex.set(vertex.x * 1.05, vertex.y * 0.72, vertex.z * 0.82).multiplyScalar(ripple);
-      cerebellumPosition.setXYZ(j, vertex.x, vertex.y, vertex.z);
+    for (var i = 0; i < cerebellumPosition.count; i += 1) {
+      vertex.fromBufferAttribute(cerebellumPosition, i);
+      var ripple = 1 + 0.10 * Math.sin(vertex.x * 18.0) * Math.cos(vertex.y * 10.0);
+      vertex.set(vertex.x * 1.18, vertex.y * 0.62, vertex.z * 0.74).multiplyScalar(ripple);
+      cerebellumPosition.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
     cerebellumGeometry.computeVertexNormals();
 
     var cerebellum = new THREE.Mesh(
       cerebellumGeometry,
       new THREE.MeshPhongMaterial({
-        color: 0x8f9eb2,
-        emissive: 0x0a0f14,
-        shininess: 18,
+        color: 0x7f8ea2,
+        emissive: 0x090d12,
+        shininess: 12,
+        transparent: true,
+        opacity: 0.86
+      })
+    );
+    cerebellum.position.set(0, -0.37, -0.76);
+    group.add(cerebellum);
+
+    var stem = new THREE.Mesh(
+      new THREE.CylinderBufferGeometry(0.10, 0.14, 0.34, 22),
+      new THREE.MeshPhongMaterial({
+        color: 0x74859a,
+        emissive: 0x080d14,
+        shininess: 10,
         transparent: true,
         opacity: 0.82
       })
     );
-    cerebellum.position.set(0, -0.33, -0.72);
-    scene.add(cerebellum);
+    stem.position.set(0, -0.70, -0.26);
+    stem.rotation.x = -0.18;
+    group.add(stem);
+  }
 
-    var stem = new THREE.Mesh(
-      new THREE.CylinderBufferGeometry(0.14, 0.11, 0.26, 24),
-      new THREE.MeshPhongMaterial({
-        color: 0x7d8ea4,
-        emissive: 0x090f16,
-        shininess: 16,
-        transparent: true,
-        opacity: 0.78
-      })
-    );
-    stem.position.set(0, -0.65, -0.30);
-    stem.rotation.x = -0.22;
-    scene.add(stem);
+  function createNeutralColorAttribute(count) {
+    var colors = new Float32Array(count * 3);
+    for (var i = 0; i < count; i += 1) {
+      colors[i * 3] = COLOR_NEUTRAL[0];
+      colors[i * 3 + 1] = COLOR_NEUTRAL[1];
+      colors[i * 3 + 2] = COLOR_NEUTRAL[2];
+    }
+    return new THREE.BufferAttribute(colors, 3);
   }
 
   function createScalp() {
@@ -958,19 +995,24 @@
   }
 
   function updateInfluenceMap(activeElectrodes) {
-    if (!brainGeometry) {
+    if (!brainGeometries.length) {
       return;
     }
 
-    var positionAttr = brainGeometry.attributes.position;
-    var colorAttr = brainGeometry.attributes.color;
     var target = getTargetById(state.targetId);
-
     var targetDir = new THREE.Vector3();
     if (target) {
       targetDir.set(target.brainCoord.x, target.brainCoord.y, target.brainCoord.z).normalize();
     }
 
+    for (var g = 0; g < brainGeometries.length; g += 1) {
+      applyInfluenceToGeometry(brainGeometries[g], activeElectrodes, targetDir, !!target);
+    }
+  }
+
+  function applyInfluenceToGeometry(geometry, activeElectrodes, targetDir, hasTarget) {
+    var positionAttr = geometry.attributes.position;
+    var colorAttr = geometry.attributes.color;
     var vertex = new THREE.Vector3();
     var electrodeDir = new THREE.Vector3();
     var sigma = state.mode === "hd" ? VISUAL.hdSigma : VISUAL.tdcsSigma;
@@ -978,7 +1020,6 @@
     var maxAbs = 0;
     var intentSign = state.intent === "stimulate" ? 1 : -1;
 
-    // Heuristic influence model: signed gaussian decay over the cortical surface.
     for (var i = 0; i < positionAttr.count; i += 1) {
       vertex.fromBufferAttribute(positionAttr, i).normalize();
       var value = 0;
@@ -990,7 +1031,7 @@
         value += activeElectrodes[j].weight * gauss;
       }
 
-      if (target) {
+      if (hasTarget) {
         var focusDistance = vertex.distanceTo(targetDir);
         var focus = Math.exp(-(focusDistance * focusDistance) / (2 * 0.36 * 0.36));
         value += intentSign * 0.16 * focus;
