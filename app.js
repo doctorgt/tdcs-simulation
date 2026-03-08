@@ -783,17 +783,47 @@
   }
 
   function createBrain() {
-    brainGeometry = new THREE.IcosahedronBufferGeometry(VISUAL.brainRadius, 6);
+    brainGeometry = new THREE.SphereBufferGeometry(VISUAL.brainRadius, 132, 96);
     var positionAttr = brainGeometry.attributes.position;
     var vertex = new THREE.Vector3();
 
     for (var i = 0; i < positionAttr.count; i += 1) {
       vertex.fromBufferAttribute(positionAttr, i);
-      var n =
-        1 +
-        0.06 * Math.sin(vertex.x * 6.2) * Math.cos(vertex.y * 6.5) +
-        0.04 * Math.sin(vertex.z * 8.1);
-      vertex.normalize().multiplyScalar(VISUAL.brainRadius * n);
+
+      var x = vertex.x;
+      var y = vertex.y;
+      var z = vertex.z;
+      var absX = Math.abs(x);
+      var side = x >= 0 ? 1 : -1;
+
+      // Base anatomical proportions (frontal-occipital length > superior-inferior height).
+      var sx = 0.87;
+      var sy = 0.78;
+      var sz = 1.12;
+
+      // Global lobe shaping.
+      var frontalBulge = 0.14 * gaussian(z, 0.48, 0.30) * (1 - 0.25 * clamp(-y, 0, 1));
+      var parietalBulge = 0.07 * gaussian(z, 0.08, 0.35) * (1 - 0.20 * clamp(-y, 0, 1));
+      var occipitalBulge = 0.09 * gaussian(z, -0.58, 0.24);
+      var temporalBulge = 0.12 * gaussian(absX, 0.62, 0.16) * gaussian(y, -0.12, 0.30);
+
+      // Interhemispheric fissure and inferior flattening.
+      var fissureDepth = -0.12 * gaussian(absX, 0.0, 0.065) * smoothstep(-0.15, 0.80, y);
+      var ventralFlatten = -0.16 * smoothstep(-1.0, -0.18, y) * (1 - 0.40 * gaussian(absX, 0.0, 0.40));
+
+      // Stylized gyri/sulci texture, reduced near the fissure.
+      var lateralWeight = smoothstep(0.08, 0.82, absX) * (1 - 0.35 * smoothstep(0.65, 1.0, y));
+      var sulciPattern =
+        0.040 *
+        Math.sin(17.0 * z + 5.0 * y + 0.7 * side) *
+        Math.sin(11.0 * y + 7.0 * x) *
+        lateralWeight;
+
+      var shape =
+        1.0 + frontalBulge + parietalBulge + occipitalBulge + temporalBulge + fissureDepth + ventralFlatten + sulciPattern;
+      shape = clamp(shape, 0.72, 1.34);
+
+      vertex.set(x * sx, y * sy, z * sz).normalize().multiplyScalar(VISUAL.brainRadius * shape);
       positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
 
@@ -817,6 +847,44 @@
 
     brainMesh = new THREE.Mesh(brainGeometry, material);
     scene.add(brainMesh);
+
+    // Extra anatomical cues so the object reads as a brain, not a sphere.
+    var cerebellumGeometry = new THREE.SphereBufferGeometry(0.40, 44, 30);
+    var cerebellumPosition = cerebellumGeometry.attributes.position;
+    for (var j = 0; j < cerebellumPosition.count; j += 1) {
+      vertex.fromBufferAttribute(cerebellumPosition, j);
+      var ripple = 1 + 0.08 * Math.sin(vertex.x * 14.0) * Math.cos(vertex.y * 11.0);
+      vertex.set(vertex.x * 1.05, vertex.y * 0.72, vertex.z * 0.82).multiplyScalar(ripple);
+      cerebellumPosition.setXYZ(j, vertex.x, vertex.y, vertex.z);
+    }
+    cerebellumGeometry.computeVertexNormals();
+
+    var cerebellum = new THREE.Mesh(
+      cerebellumGeometry,
+      new THREE.MeshPhongMaterial({
+        color: 0x8f9eb2,
+        emissive: 0x0a0f14,
+        shininess: 18,
+        transparent: true,
+        opacity: 0.82
+      })
+    );
+    cerebellum.position.set(0, -0.33, -0.72);
+    scene.add(cerebellum);
+
+    var stem = new THREE.Mesh(
+      new THREE.CylinderBufferGeometry(0.14, 0.11, 0.26, 24),
+      new THREE.MeshPhongMaterial({
+        color: 0x7d8ea4,
+        emissive: 0x090f16,
+        shininess: 16,
+        transparent: true,
+        opacity: 0.78
+      })
+    );
+    stem.position.set(0, -0.65, -0.30);
+    stem.rotation.x = -0.22;
+    scene.add(stem);
   }
 
   function createScalp() {
@@ -824,7 +892,7 @@
     var scalpMaterial = new THREE.MeshPhongMaterial({
       color: 0x6f95b3,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.17,
       side: THREE.DoubleSide,
       shininess: 10
     });
@@ -1274,6 +1342,16 @@
 
   function updateIntensityOutput() {
     ui.intensityValue.textContent = Math.round(state.intensity * 100) + "%";
+  }
+
+  function gaussian(value, center, sigma) {
+    var d = value - center;
+    return Math.exp(-(d * d) / (2 * sigma * sigma));
+  }
+
+  function smoothstep(edge0, edge1, x) {
+    var t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
   }
 
   function clamp(value, min, max) {
