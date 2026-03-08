@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tDCS / HD-tDCS Heuristic Visualizer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="ambient ambient-left" aria-hidden="true"></div>
+  <div class="ambient ambient-right" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="control-panel card stagger-1">
+      <h1>tDCS / HD-tDCS Visualizer</h1>
+      <p class="subhead">Offline educational heuristic map. Not a clinical simulator.</p>
+
+      <div class="field-group">
+        <label for="modeSelect">Montage mode</label>
+        <select id="modeSelect">
+          <option value="tdcs">tDCS Standard</option>
+          <option value="hd">HD-tDCS 4x1</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="targetSelect">Brain target</label>
+        <select id="targetSelect"></select>
+      </div>
+
+      <div class="field-group">
+        <label for="intentSelect">Intent</label>
+        <select id="intentSelect">
+          <option value="stimulate">Stimulate</option>
+          <option value="inhibit">Inhibit</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="intensityRange">Visual intensity</label>
+        <div class="range-row">
+          <input id="intensityRange" type="range" min="30" max="100" step="1" value="82" />
+          <output id="intensityValue">82%</output>
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="generateBtn" class="primary">Generate Montage</button>
+        <button id="resetCameraBtn">Reset Camera</button>
+      </div>
+
+      <div class="button-row">
+        <button id="toggleScalpBtn">Hide Scalp</button>
+      </div>
+
+      <section class="field-group">
+        <div class="section-title">Suggested montages</div>
+        <ul id="montageList" class="montage-list"></ul>
+      </section>
+
+      <section class="field-group legend">
+        <div class="section-title">Influence legend</div>
+        <div class="gradient" aria-hidden="true"></div>
+        <div class="legend-labels">
+          <span>Opposite / lower</span>
+          <span>Neutral</span>
+          <span>Higher</span>
+        </div>
+      </section>
+
+      <section class="warning-box">
+        <strong>Scientific warning</strong>
+        <p>
+          "Stimulate/Inhibit" is a visual simplification. Real physiological response depends on many factors, and this app does not run personalized biophysical simulation.
+        </p>
+      </section>
+    </aside>
+
+    <main class="visual-panel">
+      <section class="scene-card card stagger-2">
+        <div class="section-title">3D View</div>
+        <div id="scene3d" aria-label="3D brain and scalp visualization"></div>
+      </section>
+
+      <div class="lower-grid">
+        <section class="cap-card card stagger-3">
+          <div class="section-title">2D EEG Cap View</div>
+          <canvas id="capCanvas"></canvas>
+        </section>
+
+        <section class="info-card card stagger-4">
+          <div class="section-title">Montage Information</div>
+          <dl class="info-grid">
+            <dt>Target</dt>
+            <dd id="infoTarget">-</dd>
+            <dt>Hemisphere</dt>
+            <dd id="infoHemisphere">-</dd>
+            <dt>Mode</dt>
+            <dd id="infoMode">-</dd>
+            <dt>Electrodes</dt>
+            <dd id="infoElectrodes">-</dd>
+            <dt>Polarity</dt>
+            <dd id="infoPolarity">-</dd>
+            <dt>Rationale</dt>
+            <dd id="infoRationale">-</dd>
+          </dl>
+          <p class="micro-warning">
+            Educational approximation only. Do not interpret as clinical recommendation.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="libs/three.min.js"></script>
+  <script src="libs/OrbitControls.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
