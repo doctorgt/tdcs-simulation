@@ -1,0 +1,18 @@
+Anatomical cortex mesh attribution
+
+Source work:
+Brain for Blender
+https://brainder.org/brain-for-blender
+
+Author:
+Anderson M. Winkler
+
+License:
+Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+https://creativecommons.org/licenses/by-sa/3.0/
+
+Local asset:
+assets/brain_mesh.js
+
+Notes:
+The local asset was derived from the pial full OBJ meshes and simplified for offline browser rendering.

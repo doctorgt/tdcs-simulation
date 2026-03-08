@@ -784,6 +784,49 @@
   }
 
   function createBrain() {
+    if (window.BRAIN_MESH && window.BRAIN_MESH.left && window.BRAIN_MESH.right) {
+      createBrainFromAsset(window.BRAIN_MESH);
+      return;
+    }
+
+    createProceduralBrain();
+  }
+
+  function createBrainFromAsset(asset) {
+    brainMeshes = [];
+    brainGeometries = [];
+    brainDecorGroup = new THREE.Group();
+
+    var brainMaterial = new THREE.MeshPhongMaterial({
+      vertexColors: true,
+      shininess: 14,
+      specular: new THREE.Color(0x2a3f54),
+      transparent: true,
+      opacity: 0.995
+    });
+
+    var leftGeometry = buildGeometryFromAsset(asset.left);
+    var rightGeometry = buildGeometryFromAsset(asset.right);
+    var leftHemisphere = new THREE.Mesh(leftGeometry, brainMaterial.clone());
+    var rightHemisphere = new THREE.Mesh(rightGeometry, brainMaterial.clone());
+
+    brainGeometries.push(leftGeometry, rightGeometry);
+    brainMeshes.push(leftHemisphere, rightHemisphere);
+
+    scene.add(leftHemisphere);
+    scene.add(rightHemisphere);
+  }
+
+  function buildGeometryFromAsset(meshAsset) {
+    var geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(meshAsset.positions), 3));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(meshAsset.indices), 1));
+    geometry.computeVertexNormals();
+    geometry.setAttribute("color", createNeutralColorAttribute(meshAsset.positions.length / 3));
+    return geometry;
+  }
+
+  function createProceduralBrain() {
     brainMeshes = [];
     brainGeometries = [];
     brainDecorGroup = new THREE.Group();

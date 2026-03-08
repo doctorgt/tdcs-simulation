@@ -224,6 +224,11 @@ output {
   line-height: 1.4;
 }
 
+.asset-attribution {
+  color: #f4cfb5;
+  font-size: 0.76rem;
+}
+
 .visual-panel {
   display: grid;
   grid-template-rows: minmax(410px, 1fr) auto;
